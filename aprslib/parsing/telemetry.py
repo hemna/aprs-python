@@ -215,7 +215,7 @@ def parse_telemetry_report(body):
     binary_match = re.match(r'^([01]+)', digital_field)
     if binary_match:
         binary_str = binary_match.group(1)
-        
+
         # If there are non-binary characters after binary digits, require at least 4 binary digits
         # This prevents false positives like "123" (1 binary + 2 non-binary)
         if len(binary_str) < len(digital_field):
@@ -223,7 +223,7 @@ def parse_telemetry_report(body):
             if len(binary_str) < 4:
                 # Too few binary digits before non-binary - likely invalid
                 raise ParseError("telemetry digital I/O must be binary digits")
-        
+
         # Extract leading binary digits
         if len(binary_str) < 8:
             # Pad shorter binary strings to 8 digits
@@ -233,7 +233,7 @@ def parse_telemetry_report(body):
         else:
             # Longer than 8, use first 8
             digital_str = binary_str[:8]
-        
+
         # If there's non-binary content after the binary digits, treat as comment if no comment yet
         if len(binary_str) < len(digital_field) and not comment:
             remaining = digital_field[len(binary_str):]

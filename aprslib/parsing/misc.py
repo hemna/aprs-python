@@ -8,6 +8,7 @@ __all__ = [
         'parse_user_defined',
         'parse_station_capabilities',
         'parse_raw_gps',
+        'parse_maidenhead_locator',
         ]
 
 
@@ -297,5 +298,109 @@ def parse_raw_gps(body):
                 parsed['ultimeter_data'] = hex_data[:52]
                 if len(hex_data) > 52:
                     parsed['ultimeter_extra'] = hex_data[52:]
+
+    return ('', parsed)
+
+
+# MAIDENHEAD LOCATOR BEACON
+#
+# [IO91SX]
+# [FN31pr]
+# [FN31pr45]
+# Format: [LOCATOR][SYMBOL][COMMENT]
+# LOCATOR: 4, 6, or 8 characters (2 letters + 2 digits + optional 2 letters + optional 2 digits)
+def parse_maidenhead_locator(body):
+    """
+    Parses APRS maidenhead locator beacon format: [LOCATOR][SYMBOL][COMMENT]
+
+    Format:
+    - [ indicates maidenhead locator beacon
+    - LOCATOR: 4, 6, or 8 character maidenhead grid square
+      - 4 chars: 2 letters + 2 digits (e.g., FN31)
+      - 6 chars: 2 letters + 2 digits + 2 letters (e.g., FN31pr)
+      - 8 chars: 2 letters + 2 digits + 2 letters + 2 digits (e.g., FN31pr45)
+    - Optional symbol table and symbol code
+    - Optional comment
+
+    Returns (remaining_body, parsed_dict)
+    """
+    parsed = {
+        'format': 'maidenhead-locator',
+    }
+
+    if not body:
+        return ('', parsed)
+
+    # Match maidenhead locator: 2 letters, 2 digits, optionally 2 letters, optionally 2 digits
+    # Total: 4, 6, or 8 characters
+    locator_match = re.match(r'^([A-R]{2})([0-9]{2})([A-X]{2})?([0-9]{2})?', body, re.IGNORECASE)
+    if not locator_match:
+        raise ParseError("invalid maidenhead locator format")
+
+    field = locator_match.group(1).upper()  # First 2 letters (field)
+    square = locator_match.group(2)  # Next 2 digits (square)
+    subsquare = locator_match.group(3).upper() if locator_match.group(3) else None  # Optional 2 letters (subsquare)
+    extended = locator_match.group(4) if locator_match.group(4) else None  # Optional 2 digits (extended)
+
+    # Build the full locator string
+    locator = field + square
+    if subsquare:
+        locator += subsquare
+    if extended:
+        locator += extended
+
+    parsed['locator'] = locator
+
+    # Determine precision
+    if extended:
+        parsed['locator_precision'] = 8
+    elif subsquare:
+        parsed['locator_precision'] = 6
+    else:
+        parsed['locator_precision'] = 4
+
+    # Consume the locator from body
+    body = body[len(locator):]
+
+    # Check for closing bracket right after locator
+    if body and body[0] == ']':
+        body = body[1:]
+
+    # Check for symbol table and symbol (optional)
+    # Symbol table is typically / or \ followed by a single symbol character
+    # If / or \ is followed by text (space, letter, etc.), treat as part of comment
+    if body and body[0] in '/\\':
+        symbol_table = body[0]
+        if len(body) > 1:
+            next_char = body[1]
+            # Check if next character looks like a symbol (single printable char, not space)
+            # Symbols are typically single characters like -, _, ., etc.
+            if next_char != ' ' and len(body) > 2 and body[2] not in ' ]':
+                # Looks like text after /, not a symbol - treat / as part of comment
+                pass  # Don't parse as symbol
+            else:
+                # Single symbol character
+                parsed['symbol_table'] = symbol_table
+                parsed['symbol'] = next_char
+                body = body[2:]
+                # Check for closing bracket after symbol
+                if body and body[0] == ']':
+                    body = body[1:]
+        else:
+            # Just symbol table, no symbol
+            parsed['symbol_table'] = symbol_table
+            body = body[1:]
+            # Check for closing bracket
+            if body and body[0] == ']':
+                body = body[1:]
+
+    # Remaining body is comment
+    # Strip closing bracket if present at the end
+    if body:
+        comment = body.strip(' ')
+        # Remove trailing closing bracket if present
+        if comment.endswith(']'):
+            comment = comment[:-1].rstrip(' ')
+        parsed['comment'] = comment
 
     return ('', parsed)

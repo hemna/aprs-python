@@ -54,7 +54,6 @@ unsupported_formats = {
         '-':'unused',
         '.':'reserved',
         '?':'general query format',
-        '[':'maidenhead locator beacon',
         '\\':'unused',
         ']':'unused',
         '^':'unused',
@@ -122,7 +121,7 @@ def parse(packet):
     packet_type = body[0]
     body = body[1:]
 
-    if len(body) == 0 and packet_type not in '><$':
+    if len(body) == 0 and packet_type not in '><$[':
         raise ParseError("packet body is empty after packet type character", packet)
 
     # attempt to parse the body
@@ -215,6 +214,12 @@ def _try_toparse_body(packet_type, body, parsed):
         logger.debug("Attempting to parse as raw GPS")
 
         body, result = parse_raw_gps(body)
+
+    # Maidenhead locator beacon
+    elif packet_type == '[':
+        logger.debug("Attempting to parse as maidenhead locator beacon")
+
+        body, result = parse_maidenhead_locator(body)
 
     # Item report
     elif packet_type == ')':
