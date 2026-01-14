@@ -69,15 +69,23 @@ def parse_telemetry_config(body):
             teqns = [0, 1, 0] * 5
 
             for idx, val in enumerate(eqns):
-                if not re.match(r"^([-]?\d*\.?\d+|)$", val):
+                # Strip whitespace from values (some packets have spaces after commas)
+                val = val.strip()
+                # Extract numeric part if there are non-numeric characters (e.g., "03n" -> "03")
+                # This handles cases where comments or extra data are concatenated
+                numeric_match = re.match(r'^([-]?\d*\.?\d+)', val)
+                if numeric_match:
+                    val = numeric_match.group(1)
+                elif not re.match(r"^([-]?\d*\.?\d+|)$", val):
                     raise ParseError("value at %d is not a number in %s" % (idx+1, form))
-                else:
-                    try:
-                        val = int(val)
-                    except:
-                        val = float(val) if val != "" else 0
 
-                    teqns[idx] = val
+                # Convert to number
+                try:
+                    val = int(val)
+                except:
+                    val = float(val) if val != "" else 0
+
+                teqns[idx] = val
 
             # group values in 5 list of 3
             teqns = [teqns[i*3:(i+1)*3] for i in range(5)]
@@ -191,6 +199,7 @@ def parse_telemetry_report(body):
 
     # Parse analog values (can be 000-999, allow decimals and negatives per APRS 1.2)
     # Empty values are allowed and treated as 0
+    # Some packets have data extensions concatenated (e.g., "0>/A=9125")
     analog_vals = []
     for i, val_str in enumerate(analog_strs):
         # Allow empty values (treated as 0)
@@ -198,10 +207,20 @@ def parse_telemetry_report(body):
             analog_vals.append(0.0)
             continue
 
-        # Allow integers, decimals, and negative numbers
-        # Also allow values starting with decimal point (e.g., .10 = 0.10)
-        if not re.match(r'^-?(\d+\.?\d*|\.\d+)$', val_str):
+        # Extract numeric part if there are non-numeric characters (e.g., "0>/A=9125" -> "0")
+        # This handles cases where data extensions are concatenated without proper separation
+        original_val_str = val_str
+        numeric_match = re.match(r'^-?(\d+\.?\d*|\.\d+)', val_str)
+        if numeric_match:
+            numeric_part = numeric_match.group(0)
+            remaining = val_str[len(numeric_part):]
+            val_str = numeric_part
+            # If there's remaining content (like "/A=9125"), add it to comment
+            if remaining and not comment:
+                comment = remaining
+        elif not re.match(r'^-?(\d+\.?\d*|\.\d+)$', val_str):
             raise ParseError("telemetry analog value %d has invalid format" % (i+1))
+        
         try:
             val = float(val_str)
         except ValueError:

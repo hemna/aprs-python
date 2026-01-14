@@ -108,6 +108,32 @@ class ParseTelemetryConfig(unittest.TestCase):
         self.assertIsInstance(result['tEQNS'], list)
         self.assertEqual(len(result['tEQNS']), 5)
 
+    def test_parse_telemetry_config_eqns_with_spaces(self):
+        """Test EQNS telemetry config with spaces after commas (real-world packet)"""
+        packet = "IZ6RND>IESPX,TCPIP*,qAC,T2NL::IZ6RND   :EQNS.0,0.392,-20, 0,0.235,0, 0,0.1,0, 0,1,0, 0,1,0"
+        result = parse(packet)
+
+        self.assertEqual(result['format'], 'telemetry-message')
+        self.assertIn('tEQNS', result)
+        self.assertIsInstance(result['tEQNS'], list)
+        self.assertEqual(len(result['tEQNS']), 5)
+        # Verify the values are correctly parsed (spaces should be stripped)
+        expected = [[0, 0.392, -20], [0, 0.235, 0], [0, 0.1, 0], [0, 1, 0], [0, 1, 0]]
+        self.assertEqual(result['tEQNS'], expected)
+
+    def test_parse_telemetry_config_eqns_with_non_numeric_suffix(self):
+        """Test EQNS telemetry config with non-numeric characters in last value (real-world packet)"""
+        packet = "DB0PBG-5>APMI03,DB0OL-10*,WIDE2-1,qAR,DB0PDF-10::DB0PBG-5 :EQNS.0,0.075,0,0,0.5,-64,0,10,0,0,1,0,0,0,03n"
+        result = parse(packet)
+
+        self.assertEqual(result['format'], 'telemetry-message')
+        self.assertIn('tEQNS', result)
+        self.assertIsInstance(result['tEQNS'], list)
+        self.assertEqual(len(result['tEQNS']), 5)
+        # Verify the values are correctly parsed (03n should be parsed as 3)
+        expected = [[0, 0.075, 0], [0, 0.5, -64], [0, 10, 0], [0, 1, 0], [0, 0, 3]]
+        self.assertEqual(result['tEQNS'], expected)
+
     def test_bits_without_binary_bits(self):
         """Test BITS telemetry config without binary bits (malformed packet)"""
         packet = "E25HML-13>APRS,TCPIP*,qAC,T2PERTH::E25HML-13:BITS.ESP8266 Test WX DHT22 version"

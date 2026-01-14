@@ -274,6 +274,20 @@ class ParseTelemetryReport(unittest.TestCase):
         self.assertEqual(result['telemetry']['vals'], [0.1, 12.83, 12.19, 14.0, 14.8])
         self.assertEqual(result['telemetry']['bits'], '00000000')
 
+    def test_valid_telemetry_analog_value_with_data_extension(self):
+        """Test telemetry packet with data extension concatenated to analog value (real-world packet)"""
+        packet = "IZ1DNG-10>WIDE1-1,WIDE2-2,qAR,IR1UFB:T#8,205,114,170,115,0>/A=9125"
+        result = parse(packet)
+
+        self.assertEqual(result['format'], 'telemetry')
+        self.assertEqual(result['telemetry']['seq'], 8)
+        # Analog value 5 is "0>/A=9125" - should extract "0" and preserve "/A=9125" in comment
+        self.assertEqual(result['telemetry']['vals'], [205.0, 114.0, 170.0, 115.0, 0.0])
+        self.assertEqual(result['telemetry']['bits'], '00000000')
+        # The data extension should be preserved in comment
+        self.assertIn('comment', result)
+        self.assertIn('/A=9125', result['comment'])
+
     def test_parse_telemetry_report_function_direct(self):
         """Test parse_telemetry_report function directly"""
         body = "#123,456,789,012,345,678,11001010,Test"
