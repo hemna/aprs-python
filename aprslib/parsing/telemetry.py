@@ -88,15 +88,20 @@ def parse_telemetry_config(body):
         elif form == "BITS":
             # APRS spec says 23 chars, but real-world packets may be longer
             # Accept any reasonable length (up to 100 chars to be safe)
+            # Some packets may be missing binary bits (just title)
             match = re.findall(r"^([01]{8}),(.{0,100})$", body.rstrip())
-            if not match:
-                raise ParseError("incorrect format of %s" % form)
-
-            bits, title = match[0]
-
-            parsed.update({
-                't%s' % form: bits,
-                'title': title.strip(' ')
+            if match:
+                bits, title = match[0]
+                parsed.update({
+                    't%s' % form: bits,
+                    'title': title.strip(' ')
+                })
+            else:
+                # No binary bits found - treat entire body as title
+                # This handles malformed packets like "BITS.title" without bits
+                parsed.update({
+                    't%s' % form: '00000000',  # Default to all zeros
+                    'title': body.rstrip().strip(' ')
                 })
 
     return (body, parsed)
@@ -137,10 +142,46 @@ def parse_telemetry_report(body):
     # Pad to 5 analog values if we have fewer
     while len(analog_strs) < 5:
         analog_strs.append('')
-    
-    # Digital I/O field (may be missing)
-    digital_field = parts[6] if len(parts) > 6 else '00000000'
-    comment = parts[7] if len(parts) > 7 else ''
+
+    # Digital I/O field (may be missing or in next position)
+    digital_field = parts[6] if len(parts) > 6 else ''
+    comment = ''
+
+    # If digital field is empty, check if next field could be digital I/O
+    if not digital_field or digital_field.strip() == '':
+        if len(parts) > 7:
+            next_field = parts[7]
+            # Check if next field starts with binary digits (could be digital I/O with concatenated comment)
+            binary_match = re.match(r'^([01]+)', next_field)
+            if binary_match:
+                # Extract binary digits from start of next field
+                binary_str = binary_match.group(1)
+                # Use it as digital I/O if it's reasonable length (1-8 digits)
+                if len(binary_str) <= 8:
+                    digital_field = binary_str
+                    # Rest of next_field and remaining parts are comment
+                    remaining = next_field[len(binary_str):].lstrip(',')
+                    remaining_parts = [remaining] if remaining else []
+                    if len(parts) > 8:
+                        remaining_parts.extend(parts[8:])
+                    comment = ','.join(remaining_parts) if remaining_parts else ''
+                else:
+                    # Too long, use first 8 as digital I/O
+                    digital_field = binary_str[:8]
+                    remaining = binary_str[8:] + next_field[len(binary_str):]
+                    remaining_parts = [remaining] if remaining else []
+                    if len(parts) > 8:
+                        remaining_parts.extend(parts[8:])
+                    comment = ','.join(remaining_parts) if remaining_parts else ''
+            else:
+                # Next field is not binary, treat as comment
+                digital_field = '00000000'
+                comment = ','.join(parts[7:]) if len(parts) > 7 else ''
+        else:
+            # No more fields, use default
+            digital_field = '00000000'
+    else:
+        comment = ','.join(parts[7:]) if len(parts) > 7 else ''
 
     # Validate and parse sequence number (allow any positive integer)
     # APRS spec says 000-999, but real-world packets use larger numbers
@@ -156,7 +197,7 @@ def parse_telemetry_report(body):
         if not val_str or val_str.strip() == '':
             analog_vals.append(0.0)
             continue
-        
+
         # Allow integers, decimals, and negative numbers
         if not re.match(r'^-?\d+\.?\d*$', val_str):
             raise ParseError("telemetry analog value %d has invalid format" % (i+1))
@@ -169,28 +210,36 @@ def parse_telemetry_report(body):
     # Validate digital I/O (must be binary digits, pad to 8 if shorter)
     # Some packets have comment concatenated without comma separator
     # Some packets have shorter binary strings (pad with leading zeros)
-    # Check if field is entirely binary digits
-    if re.match(r'^[01]+$', digital_field):
-        # Pure binary string (all 0s and 1s)
-        if len(digital_field) < 8:
+    # Some packets have non-binary characters mixed in (extract leading binary digits)
+    # Check if field starts with binary digits
+    binary_match = re.match(r'^([01]+)', digital_field)
+    if binary_match:
+        binary_str = binary_match.group(1)
+        
+        # If there are non-binary characters after binary digits, require at least 4 binary digits
+        # This prevents false positives like "123" (1 binary + 2 non-binary)
+        if len(binary_str) < len(digital_field):
+            # Has non-binary characters following
+            if len(binary_str) < 4:
+                # Too few binary digits before non-binary - likely invalid
+                raise ParseError("telemetry digital I/O must be binary digits")
+        
+        # Extract leading binary digits
+        if len(binary_str) < 8:
             # Pad shorter binary strings to 8 digits
-            digital_str = digital_field.zfill(8)
-        elif len(digital_field) == 8:
-            digital_str = digital_field
+            digital_str = binary_str.zfill(8)
+        elif len(binary_str) == 8:
+            digital_str = binary_str
         else:
             # Longer than 8, use first 8
-            digital_str = digital_field[:8]
-    elif re.match(r'^[01]{8,}[^01]', digital_field):
-        # Starts with 8+ binary digits followed by non-binary (concatenated comment)
-        digital_str = digital_field[:8]
-        if not comment:
-            comment = digital_field[8:]
-    elif re.match(r'^[01]{1,7}[^01]', digital_field):
-        # Starts with 1-7 binary digits followed by non-binary
-        # This is invalid - need at least 8 binary digits before comment
-        raise ParseError("telemetry digital I/O must be binary digits")
+            digital_str = binary_str[:8]
+        
+        # If there's non-binary content after the binary digits, treat as comment if no comment yet
+        if len(binary_str) < len(digital_field) and not comment:
+            remaining = digital_field[len(binary_str):]
+            comment = remaining
     else:
-        # No valid binary digits found or invalid format
+        # No valid binary digits found - this is invalid
         raise ParseError("telemetry digital I/O must be binary digits")
 
     parsed.update({

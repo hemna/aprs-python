@@ -126,6 +126,18 @@ class ParseTelemetryReport(unittest.TestCase):
         # Digital I/O should default to all zeros
         self.assertEqual(result['telemetry']['bits'], '00000000')
 
+    def test_valid_telemetry_missing_digital_with_binary_in_next(self):
+        """Test telemetry packet with missing digital I/O field, binary digits in next position"""
+        packet = "E25HML-13>APRS,TCPIP*,qAC,T2PERTH:T#075,039,,,000,000,,0000,ESP8266 Test WX DHT22 version"
+        result = parse(packet)
+
+        self.assertEqual(result['format'], 'telemetry')
+        self.assertEqual(result['telemetry']['seq'], 75)
+        self.assertEqual(result['telemetry']['vals'], [39.0, 0.0, 0.0, 0.0, 0.0])
+        # 0000 should be padded to 8 digits
+        self.assertEqual(result['telemetry']['bits'], '00000000')
+        self.assertEqual(result['comment'], 'ESP8266 Test WX DHT22 version')
+
     def test_valid_telemetry_empty_analog_value(self):
         """Test telemetry packet with empty analog value"""
         packet = "VU2IB-13>APRS,TCPIP*,qAC,T2DENMARK:T#126,250,057,000,040,,1011,Solar Power WX Station"
@@ -226,7 +238,7 @@ class ParseTelemetryReport(unittest.TestCase):
         self.assertIn("invalid format", str(context.exception))
 
     def test_invalid_telemetry_invalid_digital_bits(self):
-        """Test that invalid digital I/O format raises error"""
+        """Test that digital I/O with no binary digits raises error"""
         packet = "TEST>APRS:T#123,456,789,012,345,678,123"
 
         with self.assertRaises(ParseError) as context:
@@ -242,14 +254,14 @@ class ParseTelemetryReport(unittest.TestCase):
         # Short binary strings are padded with leading zeros
         self.assertEqual(result['telemetry']['bits'], '01100101')
 
-    def test_invalid_telemetry_digital_bits_non_binary(self):
-        """Test that digital I/O with non-binary characters raises error"""
+    def test_valid_telemetry_digital_bits_with_non_binary_suffix(self):
+        """Test that digital I/O with leading binary digits and non-binary suffix is handled (real-world packets)"""
         packet = "TEST>APRS:T#123,456,789,012,345,678,11001012"
+        result = parse(packet)
 
-        with self.assertRaises(ParseError) as context:
-            parse(packet)
-
-        self.assertIn("telemetry digital I/O must be binary digits", str(context.exception))
+        # Should extract leading binary digits (7 digits), pad to 8, and treat '2' as comment
+        self.assertEqual(result['telemetry']['bits'], '01100101')
+        self.assertEqual(result.get('comment', ''), '2')
 
     def test_parse_telemetry_report_function_direct(self):
         """Test parse_telemetry_report function directly"""

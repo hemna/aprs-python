@@ -108,6 +108,15 @@ class ParseTelemetryConfig(unittest.TestCase):
         self.assertIsInstance(result['tEQNS'], list)
         self.assertEqual(len(result['tEQNS']), 5)
 
+    def test_bits_without_binary_bits(self):
+        """Test BITS telemetry config without binary bits (malformed packet)"""
+        packet = "E25HML-13>APRS,TCPIP*,qAC,T2PERTH::E25HML-13:BITS.ESP8266 Test WX DHT22 version"
+        result = parse(packet)
+
+        self.assertEqual(result['format'], 'telemetry-message')
+        self.assertEqual(result['tBITS'], '00000000')  # Default to all zeros
+        self.assertEqual(result['title'], 'ESP8266 Test WX DHT22 version')
+
 
 if __name__ == '__main__':
     unittest.main()
