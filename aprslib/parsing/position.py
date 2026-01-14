@@ -156,8 +156,8 @@ def parse_compressed(body):
 def parse_normal(body):
     parsed = {}
 
-    match = re.findall(r"^(\d{2})([0-9 ]{2}\.[0-9 ]{2})([NnSs])([\/\\0-9A-Z])"
-                       r"(\d{3})([0-9 ]{2}\.[0-9 ]{2})([EeWw])([\x21-\x7e])(.*)$", body)
+    match = re.findall(r"^(\d{2})([0-9 ]{2}\.[0-9 ]{1,2})([NnSs])([\/\\0-9A-Z])"
+                       r"(\d{3})([0-9 ]{2}\.[0-9 ]{1,2})([EeWw])([\x21-\x7e])(.*)$", body)
 
     if match:
         parsed.update({'format': 'uncompressed'})
@@ -175,9 +175,12 @@ def parse_normal(body):
         ) = match[0]
 
         # position ambiguity
-        posambiguity = lat_min.count(' ')
+        # Strip trailing spaces before counting (trailing spaces are not part of ambiguity)
+        lat_min_stripped = lat_min.rstrip(' ')
+        lon_min_stripped = lon_min.rstrip(' ')
+        posambiguity = lat_min_stripped.count(' ')
 
-        if posambiguity != lon_min.count(' '):
+        if posambiguity != lon_min_stripped.count(' '):
             raise ParseError("latitude and longitude ambiguity mismatch")
 
         parsed.update({'posambiguity': posambiguity})
@@ -187,8 +190,9 @@ def parse_normal(body):
             lat_min = "30"
             lon_min = "30"
         else:
-            lat_min = lat_min.replace(' ', '5', 1)
-            lon_min = lon_min.replace(' ', '5', 1)
+            # Use stripped versions for ambiguity replacement
+            lat_min = lat_min_stripped.replace(' ', '5', 1)
+            lon_min = lon_min_stripped.replace(' ', '5', 1)
 
         # validate longitude and latitude
 
