@@ -220,7 +220,7 @@ def parse_telemetry_report(body):
                 comment = remaining
         elif not re.match(r'^-?(\d+\.?\d*|\.\d+)$', val_str):
             raise ParseError("telemetry analog value %d has invalid format" % (i+1))
-        
+
         try:
             val = float(val_str)
         except ValueError:

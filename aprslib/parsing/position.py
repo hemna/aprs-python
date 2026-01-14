@@ -19,7 +19,8 @@ def parse_position(packet_type, body):
     if packet_type == ')':
         logger.debug("Attempting to parse item report format")
         # Item name is 3-9 characters, followed by ! (live) or _ (kill)
-        match = re.findall(r"^([!-~]{3,9})([!_])", body)
+        # Item name can include spaces (use [ -~] instead of [!-~] to include space)
+        match = re.findall(r"^([ -~]{3,9})([!_])", body)
         if match:
             name, flag = match[0]
             parsed.update({

@@ -207,6 +207,29 @@ class ParseItemReport(unittest.TestCase):
         self.assertFalse(kill_result['alive'])
         self.assertEqual(live_result['item_name'], kill_result['item_name'])
 
+    def test_item_with_space_in_name(self):
+        """Test item report with space in item name (real-world packet)"""
+        packet = "KL7BX-10>APWW11,TCPIP*,qAC,T2LANE:)MARC VHF2!3222.60N/09438.49WrPHG5360 Marshall ARC Rptr2  Analog 145.300MHz -600kHz Tn146.2  !w^t!"
+        result = parse(packet)
+
+        self.assertEqual(result['format'], 'item')
+        self.assertEqual(result['item_name'], 'MARC VHF2')
+        self.assertEqual(result['alive'], True)
+        self.assertIn('latitude', result)
+        self.assertIn('longitude', result)
+
+    def test_item_with_all_spaces_name(self):
+        """Test item report with all spaces as item name (real-world packet)"""
+        packet = "JH9XXF-E>API705,DSTAR*,qAS,JP9YEH-IS:)   !0000.00N\\00000.00E>/"
+        result = parse(packet)
+
+        self.assertEqual(result['format'], 'item')
+        self.assertEqual(result['item_name'], '   ')  # 3 spaces
+        self.assertEqual(len(result['item_name']), 3)
+        self.assertEqual(result['alive'], True)
+        self.assertIn('latitude', result)
+        self.assertIn('longitude', result)
+
 
 if __name__ == '__main__':
     unittest.main()
