@@ -199,7 +199,8 @@ def parse_telemetry_report(body):
             continue
 
         # Allow integers, decimals, and negative numbers
-        if not re.match(r'^-?\d+\.?\d*$', val_str):
+        # Also allow values starting with decimal point (e.g., .10 = 0.10)
+        if not re.match(r'^-?(\d+\.?\d*|\.\d+)$', val_str):
             raise ParseError("telemetry analog value %d has invalid format" % (i+1))
         try:
             val = float(val_str)

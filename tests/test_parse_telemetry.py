@@ -263,6 +263,17 @@ class ParseTelemetryReport(unittest.TestCase):
         self.assertEqual(result['telemetry']['bits'], '01100101')
         self.assertEqual(result.get('comment', ''), '2')
 
+    def test_valid_telemetry_leading_decimal_analog_value(self):
+        """Test telemetry packet with leading decimal in analog value (e.g., .10 = 0.10)"""
+        packet = "IT9FDP-15>APRTLM,TCPIP*,qAC,T2CZECH:T#720,.10,12.83,12.19,14.0,14.8,00000000"
+        result = parse(packet)
+
+        self.assertEqual(result['format'], 'telemetry')
+        self.assertEqual(result['telemetry']['seq'], 720)
+        # .10 should be parsed as 0.1
+        self.assertEqual(result['telemetry']['vals'], [0.1, 12.83, 12.19, 14.0, 14.8])
+        self.assertEqual(result['telemetry']['bits'], '00000000')
+
     def test_parse_telemetry_report_function_direct(self):
         """Test parse_telemetry_report function directly"""
         body = "#123,456,789,012,345,678,11001010,Test"
