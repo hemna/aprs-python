@@ -57,7 +57,6 @@ unsupported_formats = {
         '.':'reserved',
         '<':'station capabilities',
         '?':'general query format',
-        'T':'telemetry report',
         '[':'maidenhead locator beacon',
         '\\':'unused',
         ']':'unused',
@@ -201,6 +200,12 @@ def _try_toparse_body(packet_type, body, parsed):
         logger.debug("Attempting to parse as positionless weather report")
 
         body, result = parse_weather(body)
+
+    # Telemetry report
+    elif packet_type == 'T':
+        logger.debug("Attempting to parse as telemetry report")
+
+        body, result = parse_telemetry_report(body)
 
     # postion report (regular or compressed)
     elif (packet_type in '!=/@;' or
