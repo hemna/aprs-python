@@ -46,16 +46,13 @@ from aprslib.parsing.weather import *
 
 unsupported_formats = {
         '#':'raw weather report',
-        '$':'raw gps',
         '%':'agrelo',
         '&':'reserved',
         '(':'unused',
-        ')':'item report',
         '*':'complete weather report',
         '+':'reserved',
         '-':'unused',
         '.':'reserved',
-        '<':'station capabilities',
         '?':'general query format',
         '[':'maidenhead locator beacon',
         '\\':'unused',
@@ -125,7 +122,7 @@ def parse(packet):
     packet_type = body[0]
     body = body[1:]
 
-    if len(body) == 0 and packet_type != '>':
+    if len(body) == 0 and packet_type not in '><$':
         raise ParseError("packet body is empty after packet type character", packet)
 
     # attempt to parse the body
@@ -206,6 +203,24 @@ def _try_toparse_body(packet_type, body, parsed):
         logger.debug("Attempting to parse as telemetry report")
 
         body, result = parse_telemetry_report(body)
+
+    # Station capabilities
+    elif packet_type == '<':
+        logger.debug("Attempting to parse as station capabilities")
+
+        body, result = parse_station_capabilities(body)
+
+    # Raw GPS
+    elif packet_type == '$':
+        logger.debug("Attempting to parse as raw GPS")
+
+        body, result = parse_raw_gps(body)
+
+    # Item report
+    elif packet_type == ')':
+        logger.debug("Attempting to parse as item report")
+
+        body, result = parse_position(packet_type, body)
 
     # postion report (regular or compressed)
     elif (packet_type in '!=/@;' or
