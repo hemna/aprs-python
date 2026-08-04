@@ -1,9 +1,8 @@
-import unittest2 as unittest
+import unittest
 import string
 from random import randint, randrange, sample
 from datetime import datetime
 
-from aprslib import base91
 from aprslib.parsing.common import *
 from aprslib.exceptions import ParseError
 
@@ -256,30 +255,47 @@ class DataExtentionsTC(unittest.TestCase):
             'speed': 100*1.852,
             })
 
-    def test_empty_course_speed(self):
+    def test_course_speed_spaces(self):
         body = "   /   /text"
         remaining, parsed = parse_data_extentions(body)
 
         self.assertEqual(remaining, '/text')
-        self.assertEqual(parsed, {
-            'course': 0,
-            })
+        self.assertEqual(parsed, {})
 
+    def test_course_speed_dots(self):
         body = ".../.../text"
         remaining, parsed = parse_data_extentions(body)
 
         self.assertEqual(remaining, '/text')
-        self.assertEqual(parsed, {
-            'course': 0,
-            })
+        self.assertEqual(parsed, {})
 
+    def test_course_speed_zeros(self):
+        body = "000/000/text"
+        remaining, parsed = parse_data_extentions(body)
+
+        self.assertEqual(remaining, '/text')
+        self.assertEqual(parsed, {})
+
+    def test_course_speed_valid_chars_but_invalid_values(self):
         body = "22./33 /text"
         remaining, parsed = parse_data_extentions(body)
 
         self.assertEqual(remaining, '/text')
-        self.assertEqual(parsed, {
-            'course': 0,
-            })
+        self.assertEqual(parsed, {})
+
+    def test_course_speed_invalid_chars_spd(self):
+        body = "222/33a/text"
+        remaining, parsed = parse_data_extentions(body)
+
+        self.assertEqual(remaining, '222/33a/text')
+        self.assertEqual(parsed, {})
+
+    def test_course_speed_invalid_chars_cse(self):
+        body = "22a/333/text"
+        remaining, parsed = parse_data_extentions(body)
+
+        self.assertEqual(remaining, '22a/333/text')
+        self.assertEqual(parsed, {})
 
     def test_empty_bearing_nrq(self):
         body = "111/100/   /...text"
@@ -300,6 +316,17 @@ class DataExtentionsTC(unittest.TestCase):
             'speed': 100*1.852,
             })
 
+    def test_course_speed_bearing_nrq_empty_cse_speed(self):
+        body = "000/000/234/345text"
+        remaining, parsed = parse_data_extentions(body)
+
+        self.assertEqual(remaining, 'text')
+        self.assertEqual(parsed, {
+            'course': 0,
+            'bearing': 234,
+            'nrq': 345,
+            })
+
     def test_course_speed_bearing_nrq(self):
         body = "123/100/234/345text"
         remaining, parsed = parse_data_extentions(body)
@@ -312,22 +339,77 @@ class DataExtentionsTC(unittest.TestCase):
             'nrq': 345,
             })
 
-    def test_PHG(self):
-        body = "PHG1234Atext"
+    def test_PHGR_1(self):
+        body = "PHG51325/text"
         remaining, parsed = parse_data_extentions(body)
 
         self.assertEqual(remaining, 'text')
         self.assertEqual(parsed, {
-            'phg': '1234A',
+            'phg': '51325',
+            'phg_rate': 5,
+            'phg_power': 25,
+            'phg_height': 6.096,
+            'phg_gain': 1.9952623149688795,
+            'phg_dir': 90,
+            'phg_range': 12.791023731208883,
             })
 
-        body = "PHG1234text"
+    def test_PHGR_2(self):
+        body = "PHG5132F/text"
         remaining, parsed = parse_data_extentions(body)
 
         self.assertEqual(remaining, 'text')
         self.assertEqual(parsed, {
-            'phg': '1234',
+            'phg': '5132F',
+            'phg_rate': 15,
+            'phg_power': 25,
+            'phg_height': 6.096,
+            'phg_gain': 1.9952623149688795,
+            'phg_dir': 90,
+            'phg_range': 12.791023731208883,
             })
+
+    def test_PHG_1(self):
+        body = "PHG5132Atext"
+        remaining, parsed = parse_data_extentions(body)
+
+        self.assertEqual(remaining, 'Atext')
+        self.assertEqual(parsed, {
+            'phg': '5132',
+            'phg_power': 25,
+            'phg_height': 6.096,
+            'phg_gain': 1.9952623149688795,
+            'phg_dir': 90,
+            'phg_range': 12.791023731208883,
+            })
+
+    def test_PHG_2(self):
+        body = "PHG5132text"
+        remaining, parsed = parse_data_extentions(body)
+
+        self.assertEqual(remaining, 'text')
+        self.assertEqual(parsed, {
+            'phg': '5132',
+            'phg_power': 25,
+            'phg_height': 6.096,
+            'phg_gain': 1.9952623149688795,
+            'phg_dir': 90,
+            'phg_range': 12.791023731208883,
+            })
+
+    def test_PHG_dir_omni(self):
+        body = "PHG0000text"
+        remaining, parsed = parse_data_extentions(body)
+
+        self.assertEqual(remaining, 'text')
+        self.assertEqual(parsed['phg_dir'], 'omni')
+
+    def test_PHG_dir_invalid(self):
+        body = "PHG0009text"
+        remaining, parsed = parse_data_extentions(body)
+
+        self.assertEqual(remaining, 'text')
+        self.assertEqual(parsed['phg_dir'], 'invalid')
 
     def test_range(self):
         body = "RNG1000text"
